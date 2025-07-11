@@ -1,0 +1,257 @@
+import { DataTypes } from "sequelize";
+import db from '../config/database.js';
+const { sequelize } = db;
+
+/**
+ * Claim model representing insurance claims in the system
+ */
+const Claim = sequelize.define(
+  "Claim",
+  {
+    // Primary Key
+    id: {
+      field: "CLAIM_ID",
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+
+    // Claim Identification
+    claimNumber: {
+      field: "CLAIM_NUMBER",
+      type: DataTypes.STRING(50),
+      unique: true,
+      allowNull: false,
+      validate: {
+        notEmpty: true,
+      },
+    },
+
+    // References
+    policyId: {
+      field: "POLICY_ID",
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "POLICIES",
+        key: "POLICY_ID",
+      },
+    },
+    clientId: {
+      field: "CLIENT_ID",
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "CLIENTS",
+        key: "CLIENT_ID",
+      },
+    },
+
+    // Incident Details
+    incidentDate: {
+      field: "INCIDENT_DATE",
+      type: DataTypes.DATE,
+      allowNull: false,
+    },
+    reportedDate: {
+      field: "REPORTED_DATE",
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+
+    // Financial Details
+    claimAmount: {
+      field: "CLAIM_AMOUNT",
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      validate: {
+        min: 0.01,
+      },
+    },
+    approvedAmount: {
+      field: "APPROVED_AMOUNT",
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: true,
+      validate: {
+        min: 0,
+      },
+    },
+
+    // Claim Details
+    description: {
+      field: "DESCRIPTION",
+      type: DataTypes.TEXT,
+      allowNull: false,
+      validate: {
+        notEmpty: true,
+      },
+    },
+    incidentLocation: {
+      field: "INCIDENT_LOCATION",
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+
+    // Status and Priority
+    status: {
+      field: "STATUS",
+      type: DataTypes.ENUM(
+        "REPORTED",
+        "UNDER_REVIEW",
+        "INVESTIGATING",
+        "DOCUMENTS_REQUIRED",
+        "APPROVED",
+        "DECLINED",
+        "PAID",
+        "CLOSED",
+        "REOPENED"
+      ),
+      defaultValue: "REPORTED",
+    },
+    priority: {
+      field: "PRIORITY",
+      type: DataTypes.ENUM("LOW", "MEDIUM", "HIGH", "URGENT"),
+      defaultValue: "MEDIUM",
+    },
+
+    // Claims Management
+    claimsOfficerId: {
+      field: "CLAIMS_OFFICER_ID",
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: "USERS",
+        key: "USER_ID",
+      },
+    },
+
+    // Notification
+    notificationSent: {
+      field: "NOTIFICATION_SENT",
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    lastNotificationDate: {
+      field: "LAST_NOTIFICATION_DATE",
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+
+    // Additional Information
+    notes: {
+      field: "NOTES",
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+
+    // Audit Fields
+    createdBy: {
+      field: "CREATED_BY",
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "USERS",
+        key: "USER_ID",
+      },
+    },
+    updatedBy: {
+      field: "UPDATED_BY",
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: "USERS",
+        key: "USER_ID",
+      },
+    },
+    deletedAt: {
+      field: "DELETED_AT",
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+  },
+  {
+    tableName: "CLAIMS",
+    timestamps: true,
+    createdAt: "CREATED_AT",
+    updatedAt: "UPDATED_AT",
+    paranoid: true,
+    underscored: true,
+    indexes: [
+      {
+        fields: ["CLAIM_NUMBER"],
+        unique: true,
+      },
+      {
+        fields: ["STATUS"],
+      },
+      {
+        fields: ["PRIORITY"],
+      },
+      {
+        fields: ["INCIDENT_DATE"],
+      },
+      {
+        fields: ["REPORTED_DATE"],
+      },
+    ],
+  }
+);
+
+/**
+ * Define model associations
+ * @param {Object} models - The models object containing all models
+ */
+Claim.associate = (models) => {
+  Claim.belongsTo(models.Policy, {
+    foreignKey: "POLICY_ID",
+    as: "policy",
+  });
+
+  Claim.belongsTo(models.Client, {
+    foreignKey: "CLIENT_ID",
+    as: "client",
+  });
+
+  Claim.belongsTo(models.User, {
+    foreignKey: "CLAIMS_OFFICER_ID",
+    as: "claimsOfficer",
+  });
+
+  Claim.belongsTo(models.User, {
+    foreignKey: "CREATED_BY",
+    as: "creator",
+  });
+
+  Claim.belongsTo(models.User, {
+    foreignKey: "UPDATED_BY",
+    as: "updater",
+  });
+
+  Claim.hasMany(models.Document, {
+    foreignKey: "CLAIM_ID",
+    as: "documents",
+  });
+
+  Claim.hasMany(models.Payment, {
+    foreignKey: "CLAIM_ID",
+    as: "payments",
+  });
+};
+
+/**
+ * Hooks for the Claim model
+ */
+Claim.beforeCreate(async (claim) => {
+  if (!claim.claimNumber) {
+    // Generate claim number if not provided
+    const prefix = "CLM";
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, "0");
+    claim.claimNumber = `${prefix}${timestamp}${random}`;
+  }
+});
+
+export default Claim;
